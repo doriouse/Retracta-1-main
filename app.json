@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Retracta",
+    "slug": "snack-f5b31940-1e1a-4d7a-9b69-15897cd589cb",
+    "version": "1.0.0",
+    "scheme": "retracta",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "Retracta",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.retracta.varal"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-status-bar",
+      "@react-native-community/datetimepicker",
+      "expo-notifications",
+      "expo-asset",
+      "expo-sharing"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "10c69774-51a1-4a19-9395-05a11936b9a2"
+      }
+    },
+    "owner": "laura13"
+  }
+}
