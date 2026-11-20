@@ -21,17 +21,20 @@ export async function sendLocalNotification(title, body) {
   return true;
 }
 
-export async function syncScheduleNotifications(schedules, enabled) {
-  const previousIds = JSON.parse((await AsyncStorage.getItem(SCHEDULE_NOTIFICATION_IDS)) || '[]');
+export async function syncScheduleNotifications(schedules, enabled, varalId = 'legacy') {
+  const storageKey = varalId && varalId !== 'legacy'
+    ? `${SCHEDULE_NOTIFICATION_IDS}/${varalId}`
+    : SCHEDULE_NOTIFICATION_IDS;
+  const previousIds = JSON.parse((await AsyncStorage.getItem(storageKey)) || '[]');
   await Promise.all(previousIds.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
   if (!enabled) {
-    await AsyncStorage.removeItem(SCHEDULE_NOTIFICATION_IDS);
+    await AsyncStorage.removeItem(storageKey);
     return;
   }
 
   const granted = await requestNotificationPermission();
   if (!granted) {
-    await AsyncStorage.removeItem(SCHEDULE_NOTIFICATION_IDS);
+    await AsyncStorage.removeItem(storageKey);
     return;
   }
 
@@ -64,29 +67,5 @@ export async function syncScheduleNotifications(schedules, enabled) {
       newIds.push(id);
     }
   }
-  await AsyncStorage.setItem(SCHEDULE_NOTIFICATION_IDS, JSON.stringify(newIds));
-}
-
-export async function scheduleMaintenanceReminder(appointment) {
-  const date = new Date(appointment.date);
-  date.setHours(9, 0, 0, 0);
-  date.setDate(date.getDate() - 1);
-  if (date.getTime() <= Date.now()) return null;
-  const granted = await requestNotificationPermission();
-  if (!granted) return null;
-  return Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Manutenção Retracta amanhã',
-      body: `Lembrete de manutenção agendada para ${new Date(appointment.date).toLocaleDateString('pt-BR')}.`,
-      data: { appointmentId: appointment.id },
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date,
-    },
-  });
-}
-
-export async function cancelMaintenanceReminder(identifier) {
-  if (identifier) await Notifications.cancelScheduledNotificationAsync(identifier);
+  await AsyncStorage.setItem(storageKey, JSON.stringify(newIds));
 }

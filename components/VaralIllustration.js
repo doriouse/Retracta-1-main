@@ -3,7 +3,7 @@ import { View, StyleSheet, Animated, Easing } from 'react-native';
 import { clothesPieces } from '../data/Mockdata';
 
 
-export default function VaralIllustration({ isOpen }) {
+export default function VaralIllustration({ isOpen, style }) {
   const progress = useRef(new Animated.Value(isOpen ? 1 : 0)).current;
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function VaralIllustration({ isOpen }) {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       <View style={styles.trackRow}>
         <View style={styles.pole} />
         <View style={styles.trackBg}>

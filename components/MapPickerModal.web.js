@@ -4,7 +4,15 @@ import { Feather } from '@expo/vector-icons';
 import { palette } from '../theme/Colors';
 import { createMapHtml } from '../utils/mapHtml';
 
-export default function MapPickerModal({ visible, location, onClose, onSelect }) {
+export default function MapPickerModal({
+  visible,
+  location,
+  onClose,
+  onSelect,
+  title = 'Local do clima',
+  markers = [],
+  readOnly = false,
+}) {
   const iframe = useRef(null);
 
   useEffect(() => {
@@ -12,29 +20,29 @@ export default function MapPickerModal({ visible, location, onClose, onSelect })
       if (event.source !== iframe.current?.contentWindow || event.data?.type !== 'retracta-location') return;
       try {
         const selected = JSON.parse(event.data.payload);
-        if (Number.isFinite(selected.latitude) && Number.isFinite(selected.longitude)) onSelect(selected);
+        if (!readOnly && Number.isFinite(selected.latitude) && Number.isFinite(selected.longitude)) onSelect(selected);
       } catch (error) {
         console.error('Invalid map location message', error);
       }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onSelect]);
+  }, [onSelect, readOnly]);
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.screen}>
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Local do clima</Text>
-            <Text style={styles.subtitle}>Busque uma cidade ou toque no mapa para marcar o ponto.</Text>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>{readOnly ? 'Toque em um marcador para ver o nome do varal.' : 'Busque uma cidade ou toque no mapa para marcar o ponto.'}</Text>
           </View>
           <TouchableOpacity onPress={onClose} accessibilityLabel="Fechar mapa"><Feather name="x" size={22} color={palette.textDark} /></TouchableOpacity>
         </View>
         {React.createElement('iframe', {
           ref: iframe,
           title: 'Mapa para selecionar a cidade do clima',
-          srcDoc: createMapHtml(location.latitude, location.longitude),
+          srcDoc: createMapHtml(location.latitude, location.longitude, markers, readOnly),
           style: { border: 0, flex: 1, width: '100%' },
           allow: 'geolocation',
         })}

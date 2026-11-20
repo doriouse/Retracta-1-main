@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Linking,
-  Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -11,7 +9,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { Asset } from 'expo-asset';
 import { Feather } from '@expo/vector-icons';
 import * as Sharing from 'expo-sharing';
@@ -21,24 +18,16 @@ import { aboutInfo, helpItems, notificationSettings } from '../data/Mockdata';
 import { auth } from '../utils/firebaseAuth';
 import { updateUserData } from '../utils/RetractaData';
 import {
-  cancelMaintenanceReminder,
   requestNotificationPermission,
-  scheduleMaintenanceReminder,
   syncScheduleNotifications,
 } from '../utils/notifications';
-import {
-  loadDemoValue,
-  loadMaintenanceAppointments,
-  saveMaintenanceAppointments,
-  saveDemoValue,
-} from '../utils/demoState';
 import useRetractaData from '../utils/useRetractaData';
-import MapPickerModal from '../components/MapPickerModal';
 import LegalDocumentModal from '../components/LegalDocumentModal';
 import privacyPolicy from '../assets/legal/privacy.json';
 import termsOfUse from '../assets/legal/terms.json';
 import manualMontagem from '../assets/documents/manual-montagem.pdf';
 import manualManutencao from '../assets/documents/manual-manutencao.pdf';
+import VaralManager from '../components/VaralManager';
 
 function SectionLabel({ icon, children }) {
   return (
@@ -49,7 +38,7 @@ function SectionLabel({ icon, children }) {
   );
 }
 
-function ToggleRow({ title, subtitle, value, onValueChange }) {
+function ToggleRow({ title, subtitle, value, onValueChange, disabled = false }) {
   return (
     <View style={styles.toggleRow}>
       <View style={{ flex: 1 }}>
@@ -59,6 +48,7 @@ function ToggleRow({ title, subtitle, value, onValueChange }) {
       <Switch
         value={Boolean(value)}
         onValueChange={onValueChange}
+        disabled={disabled}
         trackColor={{ false: '#D3D9E8', true: palette.configDark }}
         thumbColor="#fff"
       />
@@ -104,43 +94,38 @@ const HEALTH_ALERTS = {
   wifi_fraco: 'Sinal Wi-Fi fraco no aparelho. Aproxime o roteador ou use um repetidor.',
 };
 
-function formatAppointmentDate(date) {
-  return new Date(date).toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
-}
-
 const FAQ_ITEMS = [
   {
     question: 'O aplicativo funciona sem o ESP32?',
-    answer: 'Sim. No modo demonstração, os controles simulam as ações no aplicativo, mas não movimentam o varal físico.',
+    answer: 'Sem o ESP32 conectado, a posição do varal, os comandos de movimento e a automação ficam indisponíveis. Nenhum comando é enviado ao motor.',
   },
   {
     question: 'Como sei se o varal está conectado?',
-    answer: 'A tela Início e esta tela mostram o estado da conexão. O ESP32 precisa atualizar o lastSeen no Firebase regularmente; após 120 segundos sem atualização, o app usa a demonstração.',
+    answer: 'A tela Início e esta tela mostram o estado da conexão. O ESP32 precisa atualizar o lastSeen no Firebase regularmente; após 120 segundos sem atualização, os controles ficam indisponíveis.',
   },
   {
     question: 'Os agendamentos movimentam o varal?',
     answer: 'Os lembretes de agenda são notificações locais e não acionam o motor. Para executar movimentos programados, o firmware do ESP32 precisa implementar os agendamentos.',
   },
   {
-    question: 'Como altero a cidade exibida no clima?',
-    answer: 'Em Configurações, toque em Cidade para o clima. A busca e o mapa usam OpenStreetMap; não é necessária uma chave do Google Maps.',
+    question: 'Como vejo o clima de outro varal?',
+    answer: 'Na tela Início, selecione o varal nos botões abaixo do clima. A consulta usa as coordenadas cadastradas em Meus varais.',
   },
   {
-    question: 'Por que o clima mostra dados de demonstração?',
-    answer: 'Verifique a conexão com a internet e a chave OpenWeatherMap no .env.local. Depois de alterar essa configuração, reinicie o Expo com npx expo start -c.',
+    question: 'Por que o clima não carrega?',
+    answer: 'Verifique a conexão com a internet e a chave OpenWeatherMap. Uma chave rejeitada ou ainda não ativada será informada na tela Início. Após alterar .env.local, reinicie o Expo com npx expo start -c.',
   },
   {
     question: 'Como funcionam as notificações?',
-    answer: 'Ative a opção desejada e autorize notificações nas configurações do celular. Lembretes de agenda e manutenção são locais. Alertas remotos com o app fechado exigem um servidor.',
+    answer: 'Ative a opção desejada e autorize notificações nas configurações do celular. Lembretes de agenda são locais. Alertas remotos com o app fechado exigem um servidor.',
   },
   {
     question: 'Meus dados ficam salvos?',
-    answer: 'Os dados da conta e do dispositivo ficam no Firebase. As ações de demonstração e os agendamentos de manutenção demonstrativos ficam salvos localmente no aparelho.',
+    answer: 'Os dados da conta e do dispositivo ficam no Firebase. O histórico das estatísticas usa apenas eventos registrados pelo ESP32.',
+  },
+  {
+    question: 'O agendamento de manutenção funciona?',
+    answer: 'Não. A solicitação de manutenção não está disponível nesta versão e nenhum serviço é contratado pelo aplicativo.',
   },
 ];
 
@@ -154,30 +139,23 @@ const TROUBLESHOOTING_ITEMS = [
     answer: 'Confira a permissão de notificações do Retracta nas configurações do Android e se a preferência correspondente está ativada no app. O sistema pode limitar notificações em segundo plano.',
   },
   {
-    question: 'O app continua em modo demonstração.',
+    question: 'A posição ou os controles estão indisponíveis.',
     answer: 'Confirme que o ESP32 está conectado à internet e autenticado no Firebase, e que atualiza users/{uid}/device/lastSeen e device/isOpen. Consulte o contrato de integração no README.',
-  },
-  {
-    question: 'O clima não atualiza.',
-    answer: 'Confirme a internet, a localização selecionada e se a chave OpenWeatherMap está correta e ativa. Após alterar .env.local, reinicie o Expo limpando o cache.',
   },
 ];
 
 export default function ConfigScreen() {
-  const { data, uid, lastSync, error } = useRetractaData();
+  const { data, uid, lastSync, error, varais, activeVaralId, activeVaral } = useRetractaData();
   const settings = data.settings;
   const notifications = settings.notifications || {};
-  const location = settings.location || { latitude: -23.5505, longitude: -46.6333, name: 'São Paulo' };
-  const [demoSmartMode, setDemoSmartMode] = useState(true);
-  const [mapVisible, setMapVisible] = useState(false);
-  const [maintenanceModal, setMaintenanceModal] = useState(false);
-  const [maintenanceDate, setMaintenanceDate] = useState(new Date(Date.now() + 86400000));
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [appointments, setAppointments] = useState([]);
   const [legalDocument, setLegalDocument] = useState(null);
+  const [now, setNow] = useState(Date.now());
   const lastSeen = Number(data.device.lastSeen || 0);
-  const deviceOnline = Number.isFinite(lastSeen) && Date.now() - lastSeen < 120000;
-  const smartMode = deviceOnline ? data.device.smartMode !== false : demoSmartMode;
+  const deviceOnline = Number.isFinite(lastSeen)
+    && now - lastSeen < 120000
+    && (!activeVaral?.deviceId
+      || String(data.device.id || '').toUpperCase() === String(activeVaral.deviceId).toUpperCase());
+  const smartMode = data.device.smartMode !== false;
   const autoReopen = data.device.autoReopen !== false;
   const health = deviceOnline && data.device.health ? data.device.health : null;
   const healthColor = !health ? palette.textMuted : health.status === 'fault' ? palette.danger : health.status === 'attention' ? palette.warning : palette.success;
@@ -192,18 +170,13 @@ export default function ConfigScreen() {
     : '—';
 
   useEffect(() => {
-    if (!uid) return;
-    Promise.all([loadMaintenanceAppointments(uid), loadDemoValue(uid, 'smartMode', true)])
-      .then(([savedAppointments, savedSmartMode]) => {
-        setAppointments(savedAppointments);
-        setDemoSmartMode(savedSmartMode);
-      })
-      .catch((loadError) => Alert.alert('Falha ao carregar configurações locais', loadError.message));
-  }, [uid]);
+    const timer = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   const updateSettings = async (path, values) => {
     try {
-      await updateUserData(uid, path, values);
+      await updateUserData(uid, path, values, activeVaralId);
       return true;
     } catch (writeError) {
       Alert.alert('Não foi possível salvar a configuração', writeError.message);
@@ -234,7 +207,7 @@ export default function ConfigScreen() {
     if (!saved) return;
     if (key === 'schedules') {
       try {
-        await syncScheduleNotifications(data.schedules, enabled);
+        await syncScheduleNotifications(data.schedules, enabled, activeVaralId);
       } catch (notificationError) {
         Alert.alert('Não foi possível atualizar os lembretes', notificationError.message);
       }
@@ -242,47 +215,13 @@ export default function ConfigScreen() {
   };
 
   const toggleSmartMode = async (value) => {
-    if (!deviceOnline) {
-      setDemoSmartMode(value);
-      try {
-        await saveDemoValue(uid, 'smartMode', value);
-      } catch (saveError) {
-        Alert.alert('Não foi possível salvar o modo demonstração', saveError.message);
-      }
-      return;
-    }
+    if (!deviceOnline) return;
     await updateSettings('device', { smartMode: value });
   };
 
   const toggleAutoReopen = async (value) => {
+    if (!deviceOnline) return;
     await updateSettings('device', { autoReopen: value });
-  };
-
-  const selectLocation = async (point) => {
-    let name = `${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}`;
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${point.latitude}&lon=${point.longitude}`,
-        { headers: { 'Accept-Language': 'pt-BR' } },
-      );
-      if (response.ok) {
-        const result = await response.json();
-        const address = result.address || {};
-        name = address.city || address.town || address.village || address.municipality || result.name || name;
-      }
-    } catch (lookupError) {
-      console.warn('Reverse geocoding failed; saving the selected coordinates.', lookupError);
-    }
-
-    try {
-      const saved = await updateSettings('settings', {
-        city: name,
-        location: { latitude: point.latitude, longitude: point.longitude, name },
-      });
-      if (saved) setMapVisible(false);
-    } catch (writeError) {
-      Alert.alert('Não foi possível salvar a localização', writeError.message);
-    }
   };
 
   const cycleSensitivity = () => {
@@ -295,59 +234,6 @@ export default function ConfigScreen() {
     const options = [1, 3, 5, 10];
     const next = options[(options.indexOf(Number(settings.retractionDelay) || 3) + 1) % options.length];
     updateSettings('settings', { retractionDelay: next });
-  };
-
-  const addMaintenance = async () => {
-    const appointment = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      date: maintenanceDate.toISOString(),
-      cost: 100,
-    };
-    const next = [...appointments, appointment].sort((a, b) => new Date(a.date) - new Date(b.date));
-    try {
-      await saveMaintenanceAppointments(uid, next);
-      setAppointments(next);
-      setMaintenanceModal(false);
-      let reminderError = '';
-      if (notifications.maintenance) {
-        try {
-          appointment.notificationId = await scheduleMaintenanceReminder(appointment);
-          const withReminder = next.map((item) => item.id === appointment.id ? appointment : item);
-          await saveMaintenanceAppointments(uid, withReminder);
-          setAppointments(withReminder);
-        } catch (notificationError) {
-          reminderError = notificationError.message;
-        }
-      }
-      Alert.alert(
-        reminderError ? 'Agendamento salvo sem lembrete' : 'Manutenção adicionada',
-        reminderError
-          ? `${reminderError} O agendamento demonstrativo foi salvo neste aparelho.`
-          : 'Agendamento demonstrativo salvo neste aparelho. Não foi enviado pedido de serviço.',
-      );
-    } catch (saveError) {
-      Alert.alert('Não foi possível salvar a manutenção', saveError.message);
-    }
-  };
-
-  const removeMaintenance = (appointment) => {
-    Alert.alert('Excluir manutenção', 'Deseja remover este agendamento demonstrativo?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await cancelMaintenanceReminder(appointment.notificationId);
-            const next = appointments.filter((item) => item.id !== appointment.id);
-            await saveMaintenanceAppointments(uid, next);
-            setAppointments(next);
-          } catch (removeError) {
-            Alert.alert('Não foi possível excluir', removeError.message);
-          }
-        },
-      },
-    ]);
   };
 
   const shareManual = async (module) => {
@@ -378,7 +264,10 @@ export default function ConfigScreen() {
       const entries = item.id === 4 ? FAQ_ITEMS : TROUBLESHOOTING_ITEMS;
       setLegalDocument({
         title: item.id === 4 ? 'Perguntas frequentes' : 'Solução de problemas',
-        text: entries.map(({ question, answer }) => `${question}\n${answer}`).join('\n\n'),
+        sections: entries,
+        description: item.id === 4
+          ? 'Toque em uma pergunta para consultar a resposta.'
+          : 'Abra um tópico para ver orientações práticas de diagnóstico.',
       });
     } else if (item.id === 6) {
       Linking.openURL('mailto:retractacompany@gmail.com?subject=Suporte%20RETRACTA&body=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20o%20aplicativo%20RETRACTA.')
@@ -410,11 +299,11 @@ export default function ConfigScreen() {
         <View style={styles.deviceTop}>
           <View style={styles.deviceIcon}><Feather name="smartphone" size={20} color="#fff" /></View>
           <View style={{ marginLeft: 12, flex: 1 }}>
-            <Text style={styles.deviceName}>Varal Retracta</Text>
-            <Text style={styles.deviceId}>ID: {data.device.id || 'RTR-4821-PRO'}</Text>
+            <Text style={styles.deviceName}>{activeVaral?.name || 'Varal Retracta'}</Text>
+            <Text style={styles.deviceId}>ID: {activeVaral?.deviceId || data.device.id || 'Aguardando dispositivo'}</Text>
             <View style={styles.connRow}>
               <View style={[styles.connDot, { backgroundColor: deviceOnline ? '#4ADE80' : '#F0A93A' }]} />
-              <Text style={styles.connText}>{deviceOnline ? 'ESP32 conectado' : 'Modo demonstração · ESP32 offline'}</Text>
+              <Text style={styles.connText}>{deviceOnline ? 'ESP32 conectado' : 'ESP32 desconectado · controles indisponíveis'}</Text>
             </View>
           </View>
         </View>
@@ -425,7 +314,7 @@ export default function ConfigScreen() {
           </View>
           <View style={styles.deviceStat}>
             <Text style={styles.deviceStatNumber}>
-              {!deviceOnline || data.device.isOpen === undefined ? 'Demonstração' : data.device.isOpen ? 'Aberto' : 'Recolhido'}
+              {!deviceOnline || data.device.isOpen === undefined ? 'Indisponível' : data.device.isOpen ? 'Aberto' : 'Recolhido'}
             </Text>
             <Text style={styles.deviceStatLabel}>Posição recebida</Text>
           </View>
@@ -437,6 +326,14 @@ export default function ConfigScreen() {
       </View>
 
       <View style={styles.body}>
+        <SectionLabel icon="wind">VARAIS E DISPOSITIVOS</SectionLabel>
+        <VaralManager
+          uid={uid}
+          data={data}
+          varais={varais}
+          activeVaralId={activeVaralId}
+        />
+
         <SectionLabel icon="heart">SAÚDE DO EQUIPAMENTO</SectionLabel>
         <View style={styles.healthCard}>
           <View style={[styles.healthIcon, { backgroundColor: `${healthColor}1A` }]}><Feather name={healthIconName} size={18} color={healthColor} /></View>
@@ -468,54 +365,34 @@ export default function ConfigScreen() {
             <Text style={[styles.syncPillText, error && { color: palette.danger }]}> {error ? 'Falhou' : syncText}</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.maintenanceButton} onPress={() => setMaintenanceModal(true)}>
-          <Feather name="tool" size={16} color="#fff" />
-          <Text style={styles.maintenanceButtonText}>Agendar manutenção demonstrativa · R$ 100,00</Text>
-        </TouchableOpacity>
-        {appointments.length > 0 && (
-          <View style={styles.appointmentsCard}>
-            <Text style={styles.toggleTitle}>Manutenções agendadas</Text>
-            {appointments.map((appointment) => (
-              <View key={appointment.id} style={styles.appointmentRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.appointmentDate}>{formatAppointmentDate(appointment.date)}</Text>
-                  <Text style={styles.toggleSubtitle}>Demonstração · R$ {appointment.cost.toFixed(2).replace('.', ',')}</Text>
-                </View>
-                <TouchableOpacity onPress={() => removeMaintenance(appointment)} accessibilityLabel="Excluir manutenção">
-                  <Feather name="trash-2" size={17} color={palette.danger} />
-                </TouchableOpacity>
-              </View>
-            ))}
+        <View style={styles.maintenanceNotice}>
+          <Feather name="tool" size={17} color={palette.warning} />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.toggleTitle}>Agendamento de manutenção</Text>
+            <Text style={styles.toggleSubtitle}>Não funcional nesta versão. Nenhuma solicitação de serviço é enviada.</Text>
           </View>
-        )}
+        </View>
 
         <SectionLabel icon="sliders">GERAL</SectionLabel>
         <View style={styles.card}>
-          <ToggleRow title="Modo Inteligente" subtitle="Automação via sensor de chuva (padrão: ativo)" value={smartMode} onValueChange={toggleSmartMode} />
+          <ToggleRow title="Modo Inteligente" subtitle={deviceOnline ? 'Automação via sensor de chuva' : 'Indisponível até conectar o ESP32.'} value={smartMode} onValueChange={toggleSmartMode} disabled={!deviceOnline} />
           <View style={styles.rowDivider} />
-          <ToggleRow title="Estender de novo quando a chuva parar" subtitle="Desligado: o varal só recolhe sozinho; para estender de novo, use o botão na tela Início" value={autoReopen} onValueChange={toggleAutoReopen} />
+          <ToggleRow title="Estender de novo quando a chuva parar" subtitle={deviceOnline ? 'Requer automação configurada no ESP32.' : 'Indisponível até conectar o ESP32.'} value={autoReopen} onValueChange={toggleAutoReopen} disabled={!deviceOnline} />
           <View style={styles.rowDivider} />
           <NavRow title="Sensibilidade do sensor" subtitle="Preferência enviada ao ESP32" rightLabel={settings.sensorSensitivity || 'Média'} onPress={cycleSensitivity} />
           <View style={styles.rowDivider} />
           <NavRow title="Delay de retração" subtitle="Atraso configurado antes de recolher" rightLabel={`${settings.retractionDelay || 3}s`} onPress={cycleDelay} />
-          <View style={styles.rowDivider} />
-          <NavRow
-            title="Cidade para o clima"
-            subtitle={`${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)} · toque no mapa para alterar`}
-            rightLabel={location.name || settings.city || 'Selecionar'}
-            onPress={() => setMapVisible(true)}
-          />
         </View>
 
         <SectionLabel icon="wifi">CONEXÃO</SectionLabel>
         <View style={styles.card}>
-          <NavRow title="Wi-Fi do ESP32" subtitle="A rede deve ser configurada no firmware do dispositivo" rightLabel={deviceOnline ? 'Online' : 'Demonstração'} onPress={() => Alert.alert('Configuração Wi-Fi', 'Configure o SSID e a senha da rede diretamente no firmware. Consulte o contrato de integração no README.')} />
+          <NavRow title="Wi-Fi do ESP32" subtitle="A rede deve ser configurada no firmware do dispositivo" rightLabel={deviceOnline ? 'Online' : 'Desconectado'} onPress={() => Alert.alert('Configuração Wi-Fi', 'Configure o SSID e a senha da rede diretamente no firmware. Consulte o contrato de integração no README.')} />
         </View>
 
         <SectionLabel icon="bell">NOTIFICAÇÕES</SectionLabel>
         <View style={styles.card}>
           {notificationSettings.map((notification, index) => {
-            const key = ({ 1: 'rain', 2: 'schedules', 3: 'status', 4: 'maintenance' })[notification.id];
+            const key = ({ 1: 'rain', 2: 'schedules', 3: 'status' })[notification.id];
             return (
               <React.Fragment key={notification.id}>
                 <ToggleRow
@@ -528,7 +405,7 @@ export default function ConfigScreen() {
               </React.Fragment>
             );
           })}
-          <Text style={styles.notificationNote}>Lembretes de agenda e manutenção são locais. Alertas do ESP32 chegam enquanto o app está aberto; notificações remotas exigem um servidor Firebase.</Text>
+          <Text style={styles.notificationNote}>Lembretes de agenda são locais e não acionam o motor. Alertas remotos exigem um servidor Firebase.</Text>
         </View>
 
         <SectionLabel icon="lock">PRIVACIDADE</SectionLabel>
@@ -558,57 +435,25 @@ export default function ConfigScreen() {
           <View style={styles.rowDivider} />
           <NavRow title="Termos de uso" subtitle="Leia o documento RETRACTA fornecido" onPress={() => setLegalDocument({ title: 'Termos de Uso — RETRACTA', text: termsOfUse })} />
         </View>
+        <View style={[styles.card, { marginTop: 12 }]}>
+          {aboutInfo.teamMembers.map((member, index) => (
+            <React.Fragment key={member}>
+              <NavRow title={member} subtitle="Integrante do grupo RETRACTA" />
+              {index !== aboutInfo.teamMembers.length - 1 && <View style={styles.rowDivider} />}
+            </React.Fragment>
+          ))}
+        </View>
         <View style={{ height: 24 }} />
       </View>
 
-      <MapPickerModal
-        visible={mapVisible}
-        location={location}
-        onClose={() => setMapVisible(false)}
-        onSelect={selectLocation}
-      />
       <LegalDocumentModal
         visible={Boolean(legalDocument)}
         title={legalDocument?.title || ''}
         text={legalDocument?.text || ''}
+        sections={legalDocument?.sections}
+        description={legalDocument?.description}
         onClose={() => setLegalDocument(null)}
       />
-
-      <Modal visible={maintenanceModal} transparent animationType="slide" onRequestClose={() => setMaintenanceModal(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Agendar manutenção demonstrativa</Text>
-            <Text style={styles.modalSubtitle}>Valor ilustrativo fixo: R$ 100,00. Nenhum pedido real será enviado.</Text>
-            <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
-              <Feather name="calendar" size={17} color={palette.configDark} />
-              <Text style={styles.dateButtonText}>{formatAppointmentDate(maintenanceDate)}</Text>
-            </TouchableOpacity>
-            {showDatePicker && (
-              <DateTimePicker
-                value={maintenanceDate}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                minimumDate={new Date()}
-                onChange={(event, date) => {
-                  if (event.type === 'set' && date) setMaintenanceDate(date);
-                  if (Platform.OS !== 'ios') setShowDatePicker(false);
-                }}
-              />
-            )}
-            {Platform.OS === 'ios' && showDatePicker && (
-              <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.cancelButton}>
-                <Text style={styles.cancelText}>Concluir seleção</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.saveButton} onPress={addMaintenance}>
-              <Text style={styles.saveButtonText}>Salvar no aplicativo</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setMaintenanceModal(false)} style={styles.cancelButton}>
-              <Text style={styles.cancelText}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
@@ -645,11 +490,7 @@ const styles = StyleSheet.create({
   syncSubtitle: { fontSize: 11, color: palette.textMuted, marginTop: 2 },
   syncPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: `${palette.success}1A`, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
   syncPillText: { fontSize: 10, color: palette.success, fontWeight: '700' },
-  maintenanceButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: palette.configDark, borderRadius: 15, paddingVertical: 14, paddingHorizontal: 12, marginTop: 12 },
-  maintenanceButtonText: { color: '#fff', fontWeight: '700', fontSize: 13, marginLeft: 8 },
-  appointmentsCard: { backgroundColor: palette.card, borderRadius: 16, padding: 14, marginTop: 12 },
-  appointmentRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: palette.border, paddingVertical: 12, marginTop: 8 },
-  appointmentDate: { fontSize: 13, color: palette.textDark, fontWeight: '600', textTransform: 'capitalize' },
+  maintenanceNotice: { flexDirection: 'row', alignItems: 'center', backgroundColor: palette.card, borderRadius: 16, padding: 14, marginTop: 12 },
   card: { backgroundColor: palette.card, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 4, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 1 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
   toggleTitle: { fontSize: 14, fontWeight: '700', color: palette.textDark },
@@ -657,14 +498,4 @@ const styles = StyleSheet.create({
   navRowRight: { fontSize: 12, fontWeight: '700', color: palette.textDark, marginRight: 2, maxWidth: 120 },
   rowDivider: { height: 1, backgroundColor: palette.border },
   notificationNote: { fontSize: 11, color: palette.textMuted, lineHeight: 16, paddingBottom: 12 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 34 },
-  modalTitle: { color: palette.textDark, fontSize: 18, fontWeight: '800', marginBottom: 12 },
-  modalSubtitle: { fontSize: 13, color: palette.textMuted, marginBottom: 12, lineHeight: 18 },
-  dateButton: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.border, gap: 10 },
-  dateButtonText: { color: palette.textDark, fontSize: 13, textTransform: 'capitalize', flex: 1 },
-  saveButton: { backgroundColor: palette.configDark, borderRadius: 14, padding: 15, alignItems: 'center', marginTop: 14 },
-  saveButtonText: { color: '#fff', fontWeight: '700' },
-  cancelButton: { alignItems: 'center', padding: 12 },
-  cancelText: { color: palette.textMuted, fontWeight: '600' },
 });

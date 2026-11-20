@@ -1,60 +1,9 @@
-export const weather = {
-  condition: 'Parcialmente nublado',
-  temp: 22,
-  humidity: 62,
-  wind: 14,
-  thermalSensation: 27,
-};
-
 export const clothesPieces = [
   { id: 1, color: '#4C8DF0' },
   { id: 2, color: '#8B6CF0' },
   { id: 3, color: '#F0A93A' },
   { id: 4, color: '#2FBE79' },
   { id: 5, color: '#E8452F' },
-];
-
-export const schedules = [
-  {
-    id: 1,
-    title: 'Abertura matinal',
-    subtitle: 'Todo dia útil',
-    time: '07:00 · Abrir varal',
-    icon: 'sun',
-    color: '#F0A93A',
-    status: 'Ativo',
-    active: true,
-  },
-  {
-    id: 2,
-    title: 'Recolher à noite',
-    subtitle: 'Todos os dias',
-    time: '19:30 · Recolher varal',
-    icon: 'clock',
-    color: '#4C8DF0',
-    status: 'Ativo',
-    active: true,
-  },
-  {
-    id: 3,
-    title: 'Proteção contra chuva',
-    subtitle: 'Sensor de chuva',
-    time: 'Automático · Prioridade alta',
-    icon: 'cloud-rain',
-    color: '#6C4CE0',
-    status: 'Ativo',
-    active: true,
-  },
-  {
-    id: 4,
-    title: 'Final de semana',
-    subtitle: 'Sáb e Dom',
-    time: '08:00 · Abrir varal',
-    icon: 'calendar',
-    color: '#7A7F91',
-    status: 'Inativo',
-    active: false,
-  },
 ];
 
 export const notificationSettings = [
@@ -73,11 +22,6 @@ export const notificationSettings = [
     title: 'Mudança de status',
     subtitle: 'Notifica toda vez que o varal abre ou fecha',
   },
-  {
-    id: 4,
-    title: 'Manutenção preventiva',
-    subtitle: 'Lembrete quando a próxima revisão estiver próxima',
-  },
 ];
 
 export const helpItems = [
@@ -91,6 +35,12 @@ export const helpItems = [
 
 export const aboutInfo = {
   appVersion: '2.1.0',
-  appVersionDate: 'Atualizado em julho de 2025',
+  appVersionDate: 'Atualizado em 19 de novembro de 2026',
   appVersionStatus: 'Atual',
+  teamMembers: [
+    'Arthur Souza da Silva',
+    'Davi Nathan Mendes Sousa',
+    'Giovanna Cintra Santana',
+    'Laura Araújo Caprarola',
+  ],
 };

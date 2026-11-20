@@ -4,23 +4,15 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { palette } from '../theme/Colors';
-import { schedules as initialSchedules } from '../data/Mockdata';
 import { saveUserData } from '../utils/RetractaData';
 import { syncScheduleNotifications } from '../utils/notifications';
 import useRetractaData from '../utils/useRetractaData';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const SCHEDULE_ICONS = ['sun', 'cloud-rain', 'clock', 'calendar', 'home', 'moon', 'zap', 'umbrella', 'wind', 'activity'];
-const PREDEFINED_SCHEDULES = initialSchedules
-  .filter((schedule) => schedule.id !== 3)
-  .map((schedule) => ({
-    ...schedule,
-    action: schedule.id === 2 ? 'close' : 'open',
-    days: schedule.id === 1 ? [1, 2, 3, 4, 5] : schedule.id === 4 ? [0, 6] : [0, 1, 2, 3, 4, 5, 6],
-  }));
 
 export default function AgendaScreen() {
-  const { data, uid, loaded, hasSchedules } = useRetractaData();
+  const { data, uid, loaded, hasSchedules, activeVaralId } = useRetractaData();
   const schedules = data.schedules;
   const [modalVisible, setModalVisible] = useState(false);
   const [title, setTitle] = useState('');
@@ -38,17 +30,17 @@ export default function AgendaScreen() {
   useEffect(() => {
     if (loaded && !hasSchedules && !data.settings.scheduleInitialized && uid) {
       Promise.all([
-        saveUserData(uid, 'schedules', PREDEFINED_SCHEDULES),
-        saveUserData(uid, 'settings/scheduleInitialized', true),
+        saveUserData(uid, 'schedules', [], activeVaralId),
+        saveUserData(uid, 'settings/scheduleInitialized', true, activeVaralId),
       ]).catch((error) => Alert.alert('Falha ao carregar agenda', error.message));
     }
-  }, [data.settings.scheduleInitialized, hasSchedules, loaded, uid]);
+  }, [activeVaralId, data.settings.scheduleInitialized, hasSchedules, loaded, uid]);
 
   const persist = async (updated) => {
     try {
       await Promise.all([
-        saveUserData(uid, 'schedules', updated),
-        saveUserData(uid, 'settings/scheduleInitialized', true),
+        saveUserData(uid, 'schedules', updated, activeVaralId),
+        saveUserData(uid, 'settings/scheduleInitialized', true, activeVaralId),
       ]);
     } catch (error) {
       Alert.alert('Não foi possível salvar o agendamento', error.message);
@@ -57,7 +49,7 @@ export default function AgendaScreen() {
 
     if (data.settings.notifications?.schedules) {
       try {
-        await syncScheduleNotifications(updated, true);
+        await syncScheduleNotifications(updated, true, activeVaralId);
       } catch (error) {
         Alert.alert('Agendamento salvo sem atualizar os lembretes', error.message);
       }
@@ -117,6 +109,11 @@ export default function AgendaScreen() {
           <View style={[styles.progressFill, { width: `${schedules.length ? (activeCount / schedules.length) * 100 : 0}%` }]} />
         </View>
       </LinearGradient>
+
+      <View style={styles.noticeCard}>
+        <Feather name="info" size={16} color={palette.warning} />
+        <Text style={styles.noticeText}>Os horários geram lembretes locais e não movimentam o motor. A execução depende de firmware ESP32 compatível.</Text>
+      </View>
 
       <View style={styles.body}>
         <Text style={styles.sectionLabel}>PROGRAMADOS</Text>
@@ -240,6 +237,8 @@ const styles = StyleSheet.create({
   subtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 4 },
   progressTrack: { height: 5, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 3, marginTop: 16, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: '#fff', borderRadius: 3 },
+  noticeCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF5E7', borderRadius: 14, marginHorizontal: 18, marginTop: 12, padding: 14 },
+  noticeText: { flex: 1, color: palette.textDark, fontSize: 11, lineHeight: 16, marginLeft: 9 },
   body: { paddingHorizontal: 18, marginTop: 18 },
   sectionLabel: { color: palette.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 },
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: palette.card, borderRadius: 16, borderLeftWidth: 4, padding: 14, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 1 },

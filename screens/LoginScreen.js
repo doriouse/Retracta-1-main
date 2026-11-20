@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, setRememberMe } from '../utils/firebaseAuth';
+import { getAuthErrorMessage } from '../utils/authErrors';
 const AUTH_GRADIENT = ['#5B93F5', '#2E5BC8'];
 
 export default function LoginScreen({ navigation }) {
@@ -23,7 +24,7 @@ export default function LoginScreen({ navigation }) {
       await setRememberMe(rememberMe);
       await signInWithEmailAndPassword(auth, email.trim(), password);
     } catch (error) {
-      Alert.alert('Não foi possível entrar', error.message);
+      Alert.alert('Não foi possível entrar', getAuthErrorMessage(error));
     } finally {
       setBusy(false);
     }

@@ -5,13 +5,21 @@ import { Feather } from '@expo/vector-icons';
 import { palette } from '../theme/Colors';
 import { createMapHtml } from '../utils/mapHtml';
 
-export default function MapPickerModal({ visible, location, onClose, onSelect }) {
-  const source = createMapHtml(location.latitude, location.longitude);
+export default function MapPickerModal({
+  visible,
+  location,
+  onClose,
+  onSelect,
+  title = 'Local do clima',
+  markers = [],
+  readOnly = false,
+}) {
+  const source = createMapHtml(location.latitude, location.longitude, markers, readOnly);
 
   const handleMessage = (event) => {
     try {
       const selected = JSON.parse(event.nativeEvent.data);
-      if (Number.isFinite(selected.latitude) && Number.isFinite(selected.longitude)) onSelect(selected);
+      if (!readOnly && Number.isFinite(selected.latitude) && Number.isFinite(selected.longitude)) onSelect(selected);
     } catch (error) {
       console.error('Invalid map location message', error);
     }
@@ -22,8 +30,8 @@ export default function MapPickerModal({ visible, location, onClose, onSelect })
       <View style={styles.screen}>
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Local do clima</Text>
-            <Text style={styles.subtitle}>Busque uma cidade ou toque no mapa para marcar o ponto.</Text>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>{readOnly ? 'Toque em um marcador para ver o nome do varal.' : 'Busque uma cidade ou toque no mapa para marcar o ponto.'}</Text>
           </View>
           <TouchableOpacity onPress={onClose} accessibilityLabel="Fechar mapa"><Feather name="x" size={22} color={palette.textDark} /></TouchableOpacity>
         </View>

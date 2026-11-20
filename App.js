@@ -6,7 +6,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import { onAuthStateChanged } from 'firebase/auth';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { auth } from './utils/firebaseAuth';
 import HomeScreen from './screens/homeScreen';
@@ -39,8 +40,44 @@ const TAB_CONFIG = {
   Config: { icon: 'settings', activeColor: '#1D2333' },
 };
 
+const TAB_ORDER = ['Início', 'Agenda', 'Dados', 'Config'];
+
+function withSwipeNavigation(Screen, index) {
+  return function SwipeNavigationScreen(props) {
+    const touchStart = React.useRef(null);
+    const onTouchStart = (event) => {
+      const { pageX, pageY } = event.nativeEvent;
+      touchStart.current = { x: pageX, y: pageY };
+    };
+    const onTouchEnd = (event) => {
+      if (!touchStart.current) return;
+      const { pageX, pageY } = event.nativeEvent;
+      const deltaX = pageX - touchStart.current.x;
+      const deltaY = pageY - touchStart.current.y;
+      touchStart.current = null;
+      if (Math.abs(deltaX) < 70 || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return;
+      const nextIndex = index + (deltaX < 0 ? 1 : -1);
+      if (nextIndex >= 0 && nextIndex < TAB_ORDER.length) {
+        props.navigation.navigate(TAB_ORDER[nextIndex]);
+      }
+    };
+
+    return (
+      <View style={{ flex: 1 }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchCancel={() => { touchStart.current = null; }}>
+        <Screen {...props} />
+      </View>
+    );
+  };
+}
+
+const SwipeHomeScreen = withSwipeNavigation(HomeScreen, 0);
+const SwipeAgendaScreen = withSwipeNavigation(AgendaScreen, 1);
+const SwipeDadosScreen = withSwipeNavigation(DadosScreen, 2);
+const SwipeConfigScreen = withSwipeNavigation(ConfigScreen, 3);
+
 // As 4 telas principais ficam isoladas num Tab.Navigator próprio
 function MainTabs() {
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -50,9 +87,9 @@ function MainTabs() {
         tabBarInactiveTintColor: '#A3A9BC',
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
         tabBarStyle: {
-          height: 64,
-          paddingTop: 8,
-          paddingBottom: 10,
+          height: 60 + insets.bottom,
+          paddingTop: 6,
+          paddingBottom: Math.max(insets.bottom, 8),
           borderTopWidth: 1,
           borderTopColor: '#EAEDF3',
           backgroundColor: '#fff',
@@ -62,10 +99,10 @@ function MainTabs() {
         ),
       })}
     >
-      <Tab.Screen name="Início" component={HomeScreen} />
-      <Tab.Screen name="Agenda" component={AgendaScreen} />
-      <Tab.Screen name="Dados" component={DadosScreen} />
-      <Tab.Screen name="Config" component={ConfigScreen} />
+      <Tab.Screen name="Início" component={SwipeHomeScreen} />
+      <Tab.Screen name="Agenda" component={SwipeAgendaScreen} />
+      <Tab.Screen name="Dados" component={SwipeDadosScreen} />
+      <Tab.Screen name="Config" component={SwipeConfigScreen} />
     </Tab.Navigator>
   );
 }
@@ -104,5 +141,9 @@ function AppNavigator() {
 }
 
 export default function App() {
-  return <AppNavigator />;
+  return (
+    <SafeAreaProvider>
+      <AppNavigator />
+    </SafeAreaProvider>
+  );
 }
